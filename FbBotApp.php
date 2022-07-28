@@ -208,9 +208,23 @@ class FbBotApp
     {
         $data = $attachment->getData();
         $data['attachment']['payload']['is_reusable'] = true;
-        return $this->call('me/message_attachments',[
-            'message' => $data
-        ], self::TYPE_POST);
+
+        if(isset($data['filedata'])) {
+            $filedata = $data['filedata'];
+            unset($data['filedata']);
+            $payload = [
+                'message' => json_encode($data),
+                'filedata' => $filedata
+            ];
+            $withFile = true;
+        } else {
+            $payload = [
+                'message' => $data
+            ];
+            $withFile = false;
+        }
+
+        return $this->call('me/message_attachments', $payload, self::TYPE_POST, $withFile);
     }
 
     /**
@@ -523,17 +537,20 @@ class FbBotApp
      * @param string $type Type of request (GET|POST|DELETE)
      * @return array
      */
-    public function call($url, $data, $type = self::TYPE_POST)
+    public function call($url, $data, $type = self::TYPE_POST, $withFile = false)
     {
         $data['access_token'] = $this->token;
 
         if (!is_null($this->appsecret_proof)){
             $data['appsecret_proof'] = $this->appsecret_proof;
         }
-        
-        $headers = [
-            'Content-Type: application/json',
-        ];
+
+        $headers = [];
+
+        if(!$withFile){
+            $headers[] = 'Content-Type: application/json';
+        }
+
 
         if ($type == self::TYPE_GET) {
             $url .= '?'.http_build_query($data);
@@ -546,7 +563,7 @@ class FbBotApp
 
         if($type == self::TYPE_POST || $type == self::TYPE_DELETE) {
             curl_setopt($process, CURLOPT_POST, 1);
-            curl_setopt($process, CURLOPT_POSTFIELDS, json_encode($data));
+            curl_setopt($process, CURLOPT_POSTFIELDS, $withFile ? $data : json_encode($data));
         }
 
         if ($type == self::TYPE_DELETE) {
